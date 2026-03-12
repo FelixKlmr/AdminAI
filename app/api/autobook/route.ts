@@ -5,19 +5,16 @@ export async function POST(req: Request) {
   const { accessToken } = getTokens()
   if (!accessToken) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
 
-  const division = process.env.EXACT_DIVISION
   const BASE = 'https://start.exactonline.nl/api/v1'
+  const { supplierID, glAccount, vatCode, paymentCondition, division } = await req.json()
+  const div = division || process.env.EXACT_DIVISION
 
-  const { supplierID, glAccount, vatCode, paymentCondition } = await req.json()
-
-  const body: Record<string, any> = {
-    AutomaticProcessProposedEntry: 1,
-  }
+  const body: Record<string, any> = { AutomaticProcessProposedEntry: 1 }
   if (glAccount) body.GLAccountPurchase = glAccount
   if (vatCode) body.PurchaseVATCode = vatCode
   if (paymentCondition) body.PaymentConditionPurchase = paymentCondition
 
-  const res = await fetch(`${BASE}/${division}/crm/Accounts(guid'${supplierID}')`, {
+  const res = await fetch(`${BASE}/${div}/crm/Accounts(guid'${supplierID}')`, {
     method: 'PUT',
     headers: {
       Authorization: `Bearer ${accessToken}`,
