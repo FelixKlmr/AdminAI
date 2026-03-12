@@ -9,26 +9,30 @@ export async function GET() {
   const BASE = 'https://start.exactonline.nl/api/v1'
 
   try {
-    // Haal alle leveranciers op
     const accRes = await fetch(`${BASE}/${division}/crm/Accounts?$filter=IsSupplier eq true&$top=250&$select=ID,Name,GLAccountPurchase,PurchaseVATCode,PaymentConditionPurchase,AutomaticProcessProposedEntry`, {
       headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
     })
-    const accData = await accRes.json()
-    const suppliers = accData?.d || []
+    const accRaw = await accRes.text()
+    const accData = JSON.parse(accRaw)
 
-    // Haal transactieregels op — vang fouten op
+    // Exact geeft soms d.results, soms d als array
+    let suppliers: any[] = []
+    if (Array.isArray(accData?.d)) suppliers = accData.d
+    else if (Array.isArray(accData?.d?.results)) suppliers = accData.d.results
+    else return NextResponse.json({ error: 'Onverwacht formaat: ' + accRaw.slice(0, 300) }, { status: 500 })
+
+    // Haal transactieregels op
     let lines: any[] = []
     try {
       const txRes = await fetch(`${BASE}/${division}/sync/Financial/TransactionLines?$top=1000&$select=ID,Account,GLAccount,VATCode,AmountDC,Date,Type`, {
         headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
       })
       const txData = await txRes.json()
-      lines = txData?.d || []
-    } catch {
-      // Geen transactiehistorie beschikbaar, ga verder zonder
-    }
+      if (Array.isArray(txData?.d)) lines = txData.d
+      else if (Array.isArray(txData?.d?.results)) lines = txData.d.results
+    } catch { /* geen historie */ }
 
-    // Groepeer transacties per leverancier
+    // Groepeer per leverancier
     const bySupplier: Record<string, { glAccounts: Set<string>, vatCodes: Set<string>, count: number }> = {}
     for (const line of lines) {
       if (!line.Account || !line.GLAccount) continue
@@ -40,7 +44,6 @@ export async function GET() {
       bySupplier[line.Account].count++
     }
 
-    // Bepaal welke leveranciers consistent zijn
     const results = suppliers.map((s: any) => {
       const history = bySupplier[s.ID]
       const isConsistent = history && history.glAccounts.size === 1 && history.count >= 2
