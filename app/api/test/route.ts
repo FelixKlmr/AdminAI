@@ -7,13 +7,18 @@ export async function GET() {
 
   const BASE = 'https://start.exactonline.nl/api/v1'
 
+  const results: Record<string, any> = {}
+
+  // Probeer divisies op te halen via verschillende routes
   const endpoints = [
-    `/current/Me?$select=CurrentDivision,DivisionCustomer,DivisionCustomerCode,FullName`,
-    `/hrm/Divisions?$select=Code,Description,HID`,
-    `/system/Divisions?$select=Code,Description,HID`,
+    `/current/Divisions?$select=Code,Description,HID`,
+    `/current/Me?$expand=Divisions&$select=CurrentDivision,FullName`,
+    // Probeer de DivisionCustomer GUID van de Me response
+    `/crm/Accounts(guid'90b0d50e-5c39-4967-981f-76cd95b85957')?$select=ID,Name,Code`,
+    // Divisies via accountant
+    `/accountancy/Divisions?$select=Code,Description`,
   ]
 
-  const results: Record<string, any> = {}
   for (const ep of endpoints) {
     try {
       const res = await fetch(`${BASE}${ep}`, {
